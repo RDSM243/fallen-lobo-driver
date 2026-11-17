@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+"""CLI para controlar e monitorar o Mouse Fallen Lobo Wireless no Linux."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+
+from lobo_driver import LoboDriverError, LoboMouse, find_devices
+
+
+def _parse_bool(val: str) -> bool:
+    low = val.lower()
+    if low in ("on", "true", "1", "yes", "sim"):
+        return True
+    if low in ("off", "false", "0", "no", "nao", "não"):
+        return False
+    raise argparse.ArgumentTypeError(f"Valor inválido: {val} (use on/off)")
+
+
+def _parse_color(hex_str: str) -> tuple[int, int, int]:
+    s = hex_str.lstrip("#")
+    if len(s) != 6:
+        raise argparse.ArgumentTypeError("Cor deve estar no formato #RRGGBB")
+    return int(s[0:2], 16), int(s[2:4], 16), int(s[4:6], 16)
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    with LoboMouse() as mouse:
+        online = mouse.is_online()
+        ver = mouse.get_version()
+        bat = mouse.get_battery()
+        cfg = mouse.get_config()
+
+        if args.json:
+            payload = {
+                "device": mouse.device.name,
+                "mode": mouse.device.mode,
+                "hidraw": mouse.device.hidraw_path,
+                "online": online,
+                "firmware": f"{ver[0]}.{ver[1]:02d}",
+                "battery": {
+                    "percent": bat.percent,
+                    "raw_level": bat.raw_level,
+                    "voltage_mv": bat.voltage_mv,
+                    "charging": bat.charging,
+                },
+                "polling_rate_hz": cfg.polling_rate_hz,
+                "active_dpi_stage": cfg.active_dpi_stage + 1,
+                "max_dpi_stages": cfg.max_dpi_stages,
+                "lod_mm": cfg.lod_mm,
+                "debounce_ms": cfg.debounce_ms,
+                "motion_sync": cfg.motion_sync,
+                "ripple_control": cfg.ripple_control,
+                "angle_snapping": cfg.angle_snapping,
+                "dpi_stages": [
+                    {
+                        "stage": s.index + 1,
+                        "dpi_x": s.dpi_x,
+                        "dpi_y": s.dpi_y,
+                        "color": f"#{s.color[0]:02x}{s.color[1]:02x}{s.color[2]:02x}",
+                    }
+                    for s in cfg.dpi_stages[: cfg.max_dpi_stages]
+                ],
+            }
+            print(json.dumps(payload, indent=2))
+            return 0
+
+        charge_txt = " (carregando)" if bat.charging else ""
+        online_txt = "Online" if online else "Suspenso / Offline"
+        print(f"Dispositivo : {mouse.device.name} [{mouse.device.mode}] ({mouse.device.hidraw_path})")
+        print(f"Status      : {online_txt} | Firmware: v{ver[0]}.{ver[1]:02d}")
+        print(f"Bateria     : {bat.percent}% ({bat.voltage_mv} mV){charge_txt}")
+        print(f"Polling Rate: {cfg.polling_rate_hz} Hz")
+        print(f"LOD         : {cfg.lod_mm} mm | Debounce: {cfg.debounce_ms} ms")
+        print(
+            f"Sensor      : MotionSync={'ON' if cfg.motion_sync else 'OFF'} | "
+            f"Ripple={'ON' if cfg.ripple_control else 'OFF'} | "
+            f"AngleSnap={'ON' if cfg.angle_snapping else 'OFF'}"
+        )
+        print(f"Estágios DPI ({cfg.max_dpi_stages} ativos):")
+        for s in cfg.dpi_stages[: cfg.max_dpi_stages]:
+            marker = "*" if s.index == cfg.active_dpi_stage else " "
+            hex_c = f"#{s.color[0]:02x}{s.color[1]:02x}{s.color[2]:02x}"
+            dpi_txt = f"{s.dpi_x}" if s.dpi_x == s.dpi_y else f"{s.dpi_x}x{s.dpi_y}"
+            print(f"  {marker} [{s.index + 1}] {dpi_txt:>6} DPI  ({hex_c})")
+    return 0
+
+
+def cmd_battery(args: argparse.Namespace) -> int:
+    with LoboMouse() as mouse:
+        bat = mouse.get_battery()
+        if args.json:
+            print(
+                json.dumps(
+                    {
+                        "percent": bat.percent,
+                        "voltage_mv": bat.voltage_mv,
+                        "charging": bat.charging,
+                    }
+                )
+            )
+        else:
+            suffix = " ⚡" if bat.charging else ""
+            print(f"{bat.percent}% ({bat.voltage_mv} mV){suffix}")
+    return 0
+
+
+def cmd_dump_flash(args: argparse.Namespace) -> int:
+    with LoboMouse() as mouse:
+        data = mouse.read_flash(0x0000, args.length)
+        for off in range(0, len(data), 16):
+            chunk = data[off : off + 16]
+            hex_bytes = " ".join(f"{b:02x}" for b in chunk)
+            print(f"0x{off:04x}: {hex_bytes}")
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="lobo-ctl",
+        description="Driver/CLI Linux para o Mouse Fallen Lobo Wireless",
+    )
+    sub = p.add_subparsers(dest="command", required=True)
+
+    sp_status = sub.add_parser("status", help="Exibir status completo e configurações atuais")
+    sp_status.add_argument("--json", action="store_true", help="Saída em JSON")
+    sp_status.set_defaults(func=cmd_status)
+
+    sp_bat = sub.add_parser("battery", help="Exibir apenas nível de bateria")
+    sp_bat.add_argument("--json", action="store_true", help="Saída em JSON")
+    sp_bat.set_defaults(func=cmd_battery)
+
+    sp_list = sub.add_parser("list", help="Listar interfaces hidraw compatíveis")
+    sp_list.set_defaults(
+        func=lambda _a: [
+            print(f"{d.hidraw_path}  0x{d.pid:04x}  {d.mode}  {d.name}")
+            for d in find_devices()
+        ]
+        and 0
+        or 0
+    )
+
+    sp_dpi = sub.add_parser("set-dpi", help="Configurar DPI de um estágio (1..8)")
+    sp_dpi.add_argument("stage", type=int, help="Estágio (1..8)")
+    sp_dpi.add_argument("dpi", type=int, help="DPI (50..26000, múltiplo de 50)")
+    sp_dpi.add_argument("--y", type=int, default=None, help="DPI do eixo Y (opcional)")
+    sp_dpi.add_argument("--color", type=_parse_color, default=None, help="Cor LED #RRGGBB")
+    sp_dpi.set_defaults(
+        func=lambda a: _with_mouse(
+            lambda m: m.set_dpi(a.stage - 1, a.dpi, a.y, a.color)
+        )
+    )
+
+    sp_active = sub.add_parser("active-dpi", help="Selecionar estágio de DPI ativo (1..8)")
+    sp_active.add_argument("stage", type=int, help="Estágio (1..8)")
+    sp_active.set_defaults(func=lambda a: _with_mouse(lambda m: m.set_active_dpi_stage(a.stage - 1)))
+
+    sp_max = sub.add_parser("max-dpi-stages", help="Definir quantidade de estágios DPI (1..8)")
+    sp_max.add_argument("count", type=int, help="Quantidade (1..8)")
+    sp_max.set_defaults(func=lambda a: _with_mouse(lambda m: m.set_max_dpi_stages(a.count)))
+
+    sp_rate = sub.add_parser("polling-rate", help="Definir polling rate em Hz")
+    sp_rate.add_argument("hz", type=int, choices=[125, 250, 500, 1000, 2000, 4000, 8000])
+    sp_rate.set_defaults(func=lambda a: _with_mouse(lambda m: m.set_polling_rate(a.hz)))
+
+    sp_lod = sub.add_parser("lod", help="Definir Lift-Off Distance (1 ou 2 mm)")
+    sp_lod.add_argument("mm", type=int, choices=[1, 2])
+    sp_lod.set_defaults(func=lambda a: _with_mouse(lambda m: m.set_lod(a.mm)))
+
+    sp_deb = sub.add_parser("debounce", help="Definir tempo de debounce (0..30 ms)")
+    sp_deb.add_argument("ms", type=int)
+    sp_deb.set_defaults(func=lambda a: _with_mouse(lambda m: m.set_debounce(a.ms)))
+
+    sp_ms = sub.add_parser("motion-sync", help="Ativar/desativar Motion Sync (on/off)")
+    sp_ms.add_argument("state", type=_parse_bool)
+    sp_ms.set_defaults(func=lambda a: _with_mouse(lambda m: m.set_motion_sync(a.state)))
+
+    sp_rip = sub.add_parser("ripple", help="Ativar/desativar Ripple Control (on/off)")
+    sp_rip.add_argument("state", type=_parse_bool)
+    sp_rip.set_defaults(func=lambda a: _with_mouse(lambda m: m.set_ripple_control(a.state)))
+
+    sp_ang = sub.add_parser("angle-snapping", help="Ativar/desativar Angle Snapping (on/off)")
+    sp_ang.add_argument("state", type=_parse_bool)
+    sp_ang.set_defaults(func=lambda a: _with_mouse(lambda m: m.set_angle_snapping(a.state)))
+
+    sp_dump = sub.add_parser("dump-flash", help="Fazer dump hexadecimal da Flash do mouse")
+    sp_dump.add_argument("--length", type=int, default=0xC0, help="Bytes para ler (padrão: 192)")
+    sp_dump.set_defaults(func=cmd_dump_flash)
+
+    return p
+
+
+def _with_mouse(fn) -> int:
+    with LoboMouse() as mouse:
+        fn(mouse)
+    print("OK")
+    return 0
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    try:
+        return args.func(args)
+    except (LoboDriverError, ValueError) as exc:
+        print(f"Erro: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

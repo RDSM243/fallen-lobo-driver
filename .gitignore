@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*$py.class
+build/
+dist/
+*.AppImage
+runtime-x86_64
+.venv/
+venv/
+.DS_Store
+Thumbs.db

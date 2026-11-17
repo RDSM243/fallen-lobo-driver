@@ -1,0 +1,3 @@
+# Fallen Lobo Wireless (Compx) - Wired (3554:F511) and 2.4GHz Dongle (3554:F53C)
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", ATTRS{idProduct}=="f53c", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", ATTRS{idProduct}=="f511", MODE="0666", TAG+="uaccess"
