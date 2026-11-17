@@ -1,18 +1,48 @@
-# Fallen Lobo Wireless — Driver, Interface Gráfica & AppImage para Linux
+<p align="center">
+  <img src="./assets/app_icon.png" alt="Fallen Lobo Wireless icon" width="128" height="128" />
+</p>
 
-> **Aviso Legal:** Este é um projeto **independente e não-oficial** de código aberto, desenvolvido pela comunidade para fins de interoperabilidade no Linux. Não possui vínculo, patrocínio ou endosso da Fallen Gear ou da Compx. Todos os gráficos e ícones da interface são originais.
+<h1 align="center">Fallen Lobo Wireless</h1>
+
+<p align="center"><strong>Driver userspace, CLI e interface gráfica PyQt6 para Linux.</strong></p>
+
+<p align="center">
+  <a href="https://github.com/RDSM243/fallen-lobo-driver/releases/latest">
+    <img src="https://img.shields.io/github/v/release/RDSM243/fallen-lobo-driver?color=ffe000&label=Release&style=flat-square" alt="Release" />
+  </a>
+  <a href="./LICENSE">
+    <img src="https://img.shields.io/badge/License-GPL--3.0-00bcd4?style=flat-square" alt="License: GPL-3.0" />
+  </a>
+  <img src="https://img.shields.io/badge/Platform-Linux%20x86__64-1e222a?style=flat-square" alt="Platform: Linux x86_64" />
+  <img src="https://img.shields.io/badge/Python-3%20%2B%20PyQt6-3776ab?style=flat-square" alt="Python 3 + PyQt6" />
+</p>
 
 Implementação completa em userspace (`hidraw`) e interface gráfica PyQt6 para o **Mouse Gamer Fallen Lobo Wireless** (chipset Compx `3554:F53C` via dongle 2.4GHz e `3554:F511` via cabo USB-C, sensor PixArt PAW3395).
 
+> **Aviso Legal:** Este é um projeto **independente e não-oficial** de código aberto, desenvolvido pela comunidade para fins de interoperabilidade no Linux. Não possui vínculo, patrocínio ou endosso da Fallen Gear ou da Compx. Todos os gráficos e ícones da interface são originais.
+
+![Interface gráfica do Fallen Lobo Wireless exibindo o mapeamento de 6 botões, bateria e conexão wireless 2.4GHz](./docs/images/gui-preview.jpg)
+
+## Download (AppImage)
+
+**[Baixar Fallen-Lobo-Wireless-x86_64.AppImage (Releases)](https://github.com/RDSM243/fallen-lobo-driver/releases/latest)**
+
+Após baixar, dê permissão de execução e abra o aplicativo:
+
+```bash
+chmod +x Fallen-Lobo-Wireless-x86_64.AppImage
+./Fallen-Lobo-Wireless-x86_64.AppImage
+```
+
 ## Requisitos
 
-- **Python 3** (stdlib para a CLI `lobo-ctl`)
+- **Python 3** (apenas biblioteca padrão para a CLI `lobo-ctl`)
 - **PyQt6** (para a interface gráfica e AppImage)
 - Permissão `udev` para acesso `hidraw` (configurada automaticamente pelo `install.sh` ou pelo botão de reparo dentro da interface)
 
-## Instalação
+## Instalação no sistema
 
-Você pode baixar o **`Fallen-Lobo-Wireless-x86_64.AppImage`** na página de [Releases](https://github.com/RDSM243/fallen-lobo-driver/releases) e executá-lo diretamente, ou instalar no sistema pelo repositório:
+Você também pode clonar o repositório e instalar o AppImage, a regra `udev`, o ícone no menu de aplicativos e a CLI `lobo-ctl`:
 
 ```bash
 git clone https://github.com/RDSM243/fallen-lobo-driver.git
